@@ -9,3 +9,14 @@ As explained in the [documentation](deepcase.readthedocs.io), DeepCASE offers tw
 ## Context Builder Sequence Prediction
 Besides using the entire workflow, we can also use DeepCASE's ContextBuilder to predict the next item in a sequence.
 `example_hdfs.py` gives an example on how to use the DeepCASE's ContextBuilder to predict the next item in the HDFS dataset (Table IV in paper).
+
+## LANL authentication dataset
+`example_lanl.py` reads the LANL `auth.txt`/`auth.txt.gz` and `redteam.txt`/`redteam.txt.gz` files, converts authentication rows into DeepCASE sequences, and uses exact redteam matches as malicious labels.
+
+The full LANL authentication file is large, so the example reads 100,000 rows by default:
+
+```bash
+python example/example_lanl.py --auth example/data/lanl/auth.txt --redteam example/data/lanl/redteam.txt
+```
+
+Use `--nrows 0` for the full file, `--skip-model` when you only want to verify preprocessing, or `--event-fields` to choose which auth columns define the discrete event type.

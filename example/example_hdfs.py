@@ -1,5 +1,7 @@
 # Other imports
-from sklearn.metrics import classification_report
+from pathlib import Path
+from sklearn.metrics import classification_report, ConfusionMatrixDisplay, confusion_matrix
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
@@ -7,7 +9,108 @@ import torch
 from deepcase.preprocessing   import Preprocessor
 from deepcase.context_builder import ContextBuilder
 
+
+TRAINING_EPOCHS = 100
+
+
+def plot_hdfs_results(y_test, y_pred, output_path):
+    """Plot prediction quality after the HDFS example finishes."""
+    classes = np.union1d(y_test, y_pred)
+    matrix = confusion_matrix(y_test, y_pred, labels=classes)
+
+    fig, (ax_matrix, ax_counts) = plt.subplots(
+        1,
+        2,
+        figsize=(14, 6),
+        constrained_layout=True,
+    )
+
+    display = ConfusionMatrixDisplay(
+        confusion_matrix=matrix,
+        display_labels=classes,
+    )
+    display.plot(
+        ax=ax_matrix,
+        cmap="Blues",
+        colorbar=False,
+        values_format="d",
+    )
+    ax_matrix.set_title("HDFS Event Prediction Confusion Matrix")
+    ax_matrix.tick_params(axis="x", labelrotation=90)
+
+    x = np.arange(classes.shape[0])
+    width = 0.4
+    actual_counts = np.array([(y_test == event).sum() for event in classes])
+    predicted_counts = np.array([(y_pred == event).sum() for event in classes])
+
+    ax_counts.bar(x - width / 2, actual_counts, width, label="Actual")
+    ax_counts.bar(x + width / 2, predicted_counts, width, label="Predicted")
+    ax_counts.set_title("Actual vs Predicted Event Counts")
+    ax_counts.set_xlabel("Event")
+    ax_counts.set_ylabel("Number of samples")
+    ax_counts.set_xticks(x)
+    ax_counts.set_xticklabels(classes, rotation=90)
+    ax_counts.legend()
+
+    fig.savefig(output_path, dpi=160, bbox_inches="tight")
+    print("Saved Matplotlib visualization to {}".format(output_path))
+    plt.show()
+    plt.close(fig)
+
+
+def plot_training_loss_history(loss_history, output_path):
+    """Plot the ContextBuilder training loss from every completed epoch."""
+    if len(loss_history) == 0:
+        print("No training loss values were collected; skipping loss plot.")
+        return
+
+    loss_points = np.asarray(loss_history, dtype=float)
+    epoch_points = np.arange(1, loss_points.shape[0] + 1)
+    first_loss = loss_points[0]
+    final_loss = loss_points[-1]
+
+    fig, ax = plt.subplots(figsize=(8, 5), constrained_layout=True)
+    ax.plot(epoch_points, loss_points, marker="o", linewidth=2.5, color="tab:green")
+    ax.fill_between(epoch_points, loss_points, loss_points.min(), alpha=0.15, color="tab:green")
+
+    ax.annotate(
+        "First epoch\nloss = {:.4f}".format(first_loss),
+        xy=(1, first_loss),
+        xytext=(max(1, epoch_points[-1] * 0.08), first_loss + 0.001),
+        arrowprops={"arrowstyle": "->", "color": "0.35"},
+    )
+    ax.annotate(
+        "Final epoch\nloss = {:.4f}".format(final_loss),
+        xy=(epoch_points[-1], final_loss),
+        xytext=(max(1, epoch_points[-1] * 0.62), final_loss + 0.001),
+        arrowprops={"arrowstyle": "->", "color": "0.35"},
+    )
+
+    ax.set_title("ContextBuilder Training Loss Decrease")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Training loss")
+    ax.set_xlim(1, epoch_points[-1])
+    ax.grid(True, linestyle="--", alpha=0.35)
+
+    improvement = first_loss - final_loss
+    improvement_percent = improvement / first_loss * 100
+    fig.suptitle(
+        "Completed {} epochs: loss decreased from {:.4f} to {:.4f} ({:.1f}% lower)"
+        .format(epoch_points[-1], first_loss, final_loss, improvement_percent),
+        y=1.03,
+        fontsize=10,
+    )
+
+    fig.savefig(output_path, dpi=160, bbox_inches="tight")
+    print("Saved training loss visualization to {}".format(output_path))
+    plt.show()
+    plt.close(fig)
+
+
 if __name__ == "__main__":
+    example_dir = Path(__file__).resolve().parent
+    hdfs_path = example_dir / "data" / "hdfs" / "hdfs_test_normal"
+
     ########################################################################
     #                             Loading data                             #
     ########################################################################
@@ -20,7 +123,7 @@ if __name__ == "__main__":
 
     # Load data from file
     context, events, labels, mapping = preprocessor.text(
-        path    = 'data/hdfs/hdfs_test_normal',
+        path    = hdfs_path,
         verbose = True,
     )
 
@@ -33,8 +136,11 @@ if __name__ == "__main__":
 
     # Cast to cuda if available
     if torch.cuda.is_available():
+        print("Cuda is available")
         events  = events .to('cuda')
         context = context.to('cuda')
+    else:
+        print ("Cuda is not available")
 
     ########################################################################
     #                            Splitting data                            #
@@ -70,7 +176,7 @@ if __name__ == "__main__":
     context_builder.fit(
         X             = context_train,               # Context to train with
         y             = events_train.reshape(-1, 1), # Events to train with, note that these should be of shape=(n_events, 1)
-        epochs        = 100,                         # Number of epochs to train with
+        epochs        = TRAINING_EPOCHS,             # Number of epochs to train with
         batch_size    = 128,                         # Number of samples in each training batch, in paper this was 128
         learning_rate = 0.01,                        # Learning rate to train with, in paper this was 0.01
         verbose       = True,                        # If True, prints progress
@@ -106,3 +212,18 @@ if __name__ == "__main__":
         y_pred = y_pred,
         digits = 4,
     ))
+
+    ########################################################################
+    #                       Matplotlib visualization                       #
+    ########################################################################
+
+    plot_hdfs_results(
+        y_test      = y_test,
+        y_pred      = y_pred,
+        output_path = example_dir / "hdfs_prediction_results.png",
+    )
+
+    plot_training_loss_history(
+        loss_history = context_builder.loss_history,
+        output_path = example_dir / "hdfs_training_loss_summary.png",
+    )

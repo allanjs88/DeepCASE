@@ -95,6 +95,8 @@ class ContextBuilder(nn.Module):
             dropout     = 0.1,
         )
 
+        self.loss_history = []
+
     ########################################################################
     #                        ContextBuilder Forward                        #
     ########################################################################
@@ -241,6 +243,7 @@ class ContextBuilder(nn.Module):
 
         # Set to training mode
         self.train()
+        self.loss_history = []
 
         # Set criterion and optimiser
         criterion = LabelSmoothing(self.decoder_event.out.out_features, 0.1)
@@ -298,6 +301,9 @@ class ContextBuilder(nn.Module):
                             "[Epoch {:{width}}/{:{width}} loss={:.4f}]"
                             .format(epoch, epochs, total_loss/total_items,
                             width=len(str(epochs))))
+
+                if total_items > 0:
+                    self.loss_history.append(total_loss / total_items)
 
             except KeyboardInterrupt as e:
                 print("\nTraining interrupted, performing clean stop")
