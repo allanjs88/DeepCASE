@@ -8,6 +8,27 @@ DeepCASE introduces a semi-supervised approach for the contextual analysis of se
 ## Documentation
 We provide an extensive documentation including installation instructions and reference at [deepcase.readthedocs.io](https://deepcase.readthedocs.io/en/latest/).
 
+## Installation
+
+The dependencies in `requirements.txt` are tested with Python 3.14.
+
+```bash
+python3.14 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m pip install -e .
+```
+
+For CPU-only PyTorch, install it before the remaining requirements:
+
+```bash
+python -m pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cpu
+```
+
+Only load model and sequence files from trusted sources: these files include
+pickled Python objects, which can execute code when loaded. ContextBuilder
+state dictionaries use PyTorch's default weights-only loading.
+
 ## Dataset
 This research uses two datasets for its evaluation:
  1. Lastline dataset.

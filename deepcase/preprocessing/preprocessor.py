@@ -126,7 +126,7 @@ class Preprocessor(object):
         ################################################################
 
         # Set events as events
-        events = torch.Tensor(data['event'].values).to(torch.long)
+        events = torch.tensor(data['event'].to_numpy(), dtype=torch.long)
 
         # Set context full of NO_EVENTs
         context = torch.full(
@@ -159,7 +159,7 @@ class Preprocessor(object):
         # Group by machine
         for machine, events_ in machine_grouped:
             # Get indices, timestamps and events
-            indices    = events_.index.values
+            indices    = torch.tensor(events_.index.to_numpy(), dtype=torch.long)
             timestamps = events_['timestamp'].values
             events_    = events_['event'].values
 
@@ -510,7 +510,8 @@ if __name__ == "__main__":
         # Open output file
         with open(args.write, 'rb') as infile:
             # Load output
-            data = torch.load(infile)
+            # Saved sequences contain NumPy objects; only load trusted files.
+            data = torch.load(infile, weights_only=False)
             # Load variables
             events  = data.get('events')
             context = data.get('context')

@@ -129,7 +129,8 @@ if __name__ == "__main__":
     if args.load_sequences:
         with open(args.load_sequences, 'rb') as infile:
             # Load data
-            data = torch.load(infile)
+            # Saved labels and mappings contain NumPy objects; trust the source.
+            data = torch.load(infile, weights_only=False)
             # Extract data
             events  = data["events"]
             context = data["context"]

@@ -397,13 +397,15 @@ class DeepCASE(object):
             Parameters
             ----------
             infile : string
-                Path to input file from which to load DeepCASE model.
+                Path to a trusted input file from which to load DeepCASE model.
+                Loading uses pickle and can execute code from the file.
 
             device : string, optional
                 If given, cast DeepCASE automatically to device.
             """
         # Load model
-        model = torch.load(infile, map_location=device)
+        # Interpreter checkpoints contain NumPy arrays and scikit-learn trees.
+        model = torch.load(infile, map_location=device, weights_only=False)
 
         # Extract ContextBuilder and Interpreter from loaded model
         state_dict  = model['context_builder']

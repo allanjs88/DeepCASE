@@ -1,4 +1,5 @@
 # Other imports
+from argparse import ArgumentParser
 from pathlib import Path
 from sklearn.metrics import classification_report, ConfusionMatrixDisplay, confusion_matrix
 import matplotlib.pyplot as plt
@@ -13,7 +14,7 @@ from deepcase.context_builder import ContextBuilder
 TRAINING_EPOCHS = 100
 
 
-def plot_hdfs_results(y_test, y_pred, output_path):
+def plot_hdfs_results(y_test, y_pred, output_path, show=True):
     """Plot prediction quality after the HDFS example finishes."""
     classes = np.union1d(y_test, y_pred)
     matrix = confusion_matrix(y_test, y_pred, labels=classes)
@@ -54,11 +55,12 @@ def plot_hdfs_results(y_test, y_pred, output_path):
 
     fig.savefig(output_path, dpi=160, bbox_inches="tight")
     print("Saved Matplotlib visualization to {}".format(output_path))
-    plt.show()
+    if show:
+        plt.show()
     plt.close(fig)
 
 
-def plot_training_loss_history(loss_history, output_path):
+def plot_training_loss_history(loss_history, output_path, show=True):
     """Plot the ContextBuilder training loss from every completed epoch."""
     if len(loss_history) == 0:
         print("No training loss values were collected; skipping loss plot.")
@@ -103,12 +105,30 @@ def plot_training_loss_history(loss_history, output_path):
 
     fig.savefig(output_path, dpi=160, bbox_inches="tight")
     print("Saved training loss visualization to {}".format(output_path))
-    plt.show()
+    if show:
+        plt.show()
     plt.close(fig)
 
 
 if __name__ == "__main__":
+    parser = ArgumentParser(description="Train and evaluate HDFS next-event prediction.")
+    parser.add_argument("--nrows", type=int, default=None,
+                        help="Limit input sequences for a quick run (default: all).")
+    parser.add_argument("--epochs", type=int, default=TRAINING_EPOCHS,
+                        help="Training epochs (default: 100).")
+    parser.add_argument("--no-show", action="store_true",
+                        help="Save plots without opening interactive windows.")
+    parser.add_argument("--output-dir", type=Path, default=None,
+                        help="Directory for plots (default: the example directory).")
+    args = parser.parse_args()
+    if args.epochs < 1 or (args.nrows is not None and args.nrows < 1):
+        parser.error("--epochs and --nrows must be positive integers")
+    if args.no_show:
+        plt.switch_backend("Agg")
+
     example_dir = Path(__file__).resolve().parent
+    output_dir = args.output_dir if args.output_dir is not None else example_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
     hdfs_path = example_dir / "data" / "hdfs" / "hdfs_test_normal"
 
     ########################################################################
@@ -124,6 +144,7 @@ if __name__ == "__main__":
     # Load data from file
     context, events, labels, mapping = preprocessor.text(
         path    = hdfs_path,
+        nrows   = args.nrows,
         verbose = True,
     )
 
@@ -176,7 +197,7 @@ if __name__ == "__main__":
     context_builder.fit(
         X             = context_train,               # Context to train with
         y             = events_train.reshape(-1, 1), # Events to train with, note that these should be of shape=(n_events, 1)
-        epochs        = TRAINING_EPOCHS,             # Number of epochs to train with
+        epochs        = args.epochs,                # Number of epochs to train with
         batch_size    = 128,                         # Number of samples in each training batch, in paper this was 128
         learning_rate = 0.01,                        # Learning rate to train with, in paper this was 0.01
         verbose       = True,                        # If True, prints progress
@@ -220,10 +241,12 @@ if __name__ == "__main__":
     plot_hdfs_results(
         y_test      = y_test,
         y_pred      = y_pred,
-        output_path = example_dir / "hdfs_prediction_results.png",
+        output_path = output_dir / "hdfs_prediction_results.png",
+        show        = not args.no_show,
     )
 
     plot_training_loss_history(
         loss_history = context_builder.loss_history,
-        output_path = example_dir / "hdfs_training_loss_summary.png",
+        output_path = output_dir / "hdfs_training_loss_summary.png",
+        show        = not args.no_show,
     )
