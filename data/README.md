@@ -1,8 +1,9 @@
 # Datasets
 
-This research uses two datasets for its evaluation:
+This repository documents the following datasets; Lastline and HDFS were used in the original research evaluation:
  1. [Lastline dataset](#Lastline-dataset).
  2. [HDFS dataset](#HDFS-dataset).
+ 3. [LANL dataset](#lanl-dataset).
 
 ## Lastline dataset
 The real-world Lastline dataset consists of 20 international organizations that use 395 detectors to monitor 388K devices*.
@@ -33,6 +34,56 @@ Despite containing less information, we use the HDFS dataset to provide a reprod
 
 ### Download
 The HDFS dataset as we used it in our research can be downloaded from [https://github.com/wuyifan18/DeepLog/tree/master/data](https://github.com/wuyifan18/DeepLog/tree/master/data).
+
+## LANL dataset
+
+The [LANL Comprehensive, Multi-Source Cyber-Security Events dataset](https://csr.lanl.gov/data/cyber1/) covers 58 consecutive days of de-identified activity from Los Alamos National Laboratory's internal network. It contains approximately 1.65 billion events (12 GB compressed). Identifiers are consistent across files; timestamps are relative seconds starting at 1, not calendar dates. Missing values use `?`.
+
+### Files and download
+
+Download the files from the [official LANL dataset page](https://csr.lanl.gov/data/cyber1/), which requests an email address and intended use.
+
+| File | Contents |
+| --- | --- |
+| `auth.txt.gz` | Windows and Active Directory authentication events |
+| `proc.txt.gz` | Process starts and stops |
+| `flows.txt.gz` | Network flows |
+| `dns.txt.gz` | DNS lookups |
+| `redteam.txt.gz` | Known compromise events drawn from authentication records |
+
+### Using LANL with DeepCASE
+
+The repository's [LANL example](../example/example_lanl.py) uses only the authentication and redteam files. Save them under `example/data/lanl/`, then run from the repository root with DeepCASE and its dependencies installed:
+
+```bash
+python example/example_lanl.py \
+  --auth example/data/lanl/auth.txt.gz \
+  --redteam example/data/lanl/redteam.txt.gz \
+  --nrows 100000 \
+  --summary \
+  --skip-model
+```
+
+Both compressed `.gz` files and uncompressed `.txt` files are supported. Without explicit paths, the example expects `example/data/lanl/auth.txt` and `example/data/lanl/redteam.txt`. Remove `--skip-model` to train and evaluate DeepCASE.
+
+The example converts authentication records into these DeepCASE columns:
+
+| Column | Mapping |
+| --- | --- |
+| `timestamp` | Authentication timestamp |
+| `machine` | Source computer |
+| `event` | Categorical ID combining authentication type, logon type, authentication orientation, success, and whether source and destination users differ |
+| `label` | `1` for an exact redteam match on timestamp, source user, source computer, and destination computer; `0` otherwise |
+
+Label `0` means no matching redteam record, rather than independently verified benign activity. Event IDs are generated from the loaded sample; `--event-fields` changes which fields define an event.
+
+By default, the example reads the first 100,000 authentication rows and then sorts them by timestamp. Small samples may contain no redteam matches. Increase `--nrows` to expand the sample; `--nrows 0` loads the full authentication file into memory and requires substantially more RAM.
+
+### Citation and terms
+
+LANL requests citation of Alexander D. Kent, *Cybersecurity Data Sources for Dynamic Network Research*, in *Dynamic Networks in Cybersecurity* (2015). The dataset itself is [Alexander D. Kent, *Comprehensive, Multi-Source Cyber-Security Events* (2015), DOI: 10.17021/1179829](https://doi.org/10.17021/1179829).
+
+LANL waives copyright and related rights to the extent legally possible; see the [source page's license statement](https://csr.lanl.gov/data/cyber1/).
 
 ## References
 

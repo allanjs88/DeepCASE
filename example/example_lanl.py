@@ -119,7 +119,7 @@ def make_lanl_frame(auth_path, redteam_path, nrows=None, event_fields=None, summ
     redteam_events = redteam_keys(redteam)
     auth = read_auth(auth_path, nrows=nrows)
 
-    auth = auth.sort_values("timestamp").reset_index(drop=True)
+    auth = auth.sort_values("timestamp", kind="stable").reset_index(drop=True)
     auth["label"] = [
         int(key in redteam_events)
         for key in auth[REDTEAM_COLUMNS].itertuples(index=False, name=None)
@@ -140,8 +140,30 @@ def make_lanl_frame(auth_path, redteam_path, nrows=None, event_fields=None, summ
     )[["timestamp", "machine", "event", "label"]]
 
 
-def split_by_time(context, events, labels, train_ratio):
-    split = int(events.shape[0] * train_ratio)
+def partition_index(data, train_ratio=0.2, split_time=None):
+    if not 0 < train_ratio < 1:
+        raise ValueError("train-ratio must be between 0 and 1.")
+    if data.empty:
+        raise ValueError("No authentication rows loaded.")
+    if split_time is None:
+        candidate = min(int(len(data) * train_ratio), len(data) - 1)
+        split_time = int(data.iloc[candidate]["timestamp"])
+    split = int(data["timestamp"].searchsorted(split_time, side="left"))
+    if split == 0 or split == len(data):
+        raise ValueError("Temporal split produced an empty partition; choose another split-time.")
+    print("Temporal split: train timestamp < {}; test timestamp >= {}".format(split_time, split_time))
+    for name, frame in [("Train", data.iloc[:split]), ("Test", data.iloc[split:])]:
+        positives = int(frame["label"].sum())
+        print("{}: {:,} rows; {:,} redteam matches; timestamps {} to {}".format(
+            name, len(frame), positives, frame["timestamp"].min(), frame["timestamp"].max()))
+        if positives == 0:
+            print("Warning: {} has no known positive events.".format(name))
+    return split
+
+
+def split_by_time(context, events, labels, train_ratio, split=None):
+    if split is None:
+        split = int(events.shape[0] * train_ratio)
     return (
         context[:split],
         context[split:],
@@ -187,6 +209,8 @@ def parse_args():
     parser.add_argument("--context-length", default=10, type=int)
     parser.add_argument("--timeout", default=86_400, type=int)
     parser.add_argument("--train-ratio", default=0.2, type=float)
+    parser.add_argument("--split-time", type=int, help="First test timestamp; keeps equal timestamps together.")
+    parser.add_argument("--report-only", action="store_true", help="Report partition label counts without allocating context tensors or training.")
     parser.add_argument("--hidden-size", default=128, type=int)
     parser.add_argument("--epochs", default=3, type=int)
     parser.add_argument("--batch-size", default=128, type=int)
@@ -233,6 +257,10 @@ if __name__ == "__main__":
                 .format(nrows)
             )
 
+    split = partition_index(data, args.train_ratio, args.split_time)
+    if args.report_only:
+        raise SystemExit(0)
+
     preprocessor = Preprocessor(
         length=args.context_length,
         timeout=args.timeout,
@@ -267,7 +295,7 @@ if __name__ == "__main__":
         events_test,
         labels_train,
         labels_test,
-    ) = split_by_time(context, events, labels, args.train_ratio)
+    ) = split_by_time(context, events, labels, args.train_ratio, split=split)
 
     if events_train.shape[0] == 0 or events_test.shape[0] == 0:
         raise ValueError("Train/test split produced an empty partition.")
