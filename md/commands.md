@@ -63,6 +63,26 @@ OMP_NUM_THREADS=2 python example/example_hdfs.py --no-show --output-dir saves/hd
 
 Plots are saved in `saves/hdfs-full/`.
 
+## HDFS graph options
+
+By default, the HDFS example saves and displays prediction and training loss
+graphs. Use `--no-show` to save them without opening interactive windows, or
+`--no-graphs` to skip generating, saving, and displaying both graphs:
+
+```bash
+OMP_NUM_THREADS=2 python example/example_hdfs.py --nrows 1000 --epochs 2 --no-graphs
+```
+
+For a full 100-epoch run without graphs:
+
+```bash
+OMP_NUM_THREADS=2 python example/example_hdfs.py --no-graphs
+```
+
+When calling `ResultsPlotter` from Python, both `plot_prediction_results(...)`
+and `plot_training_loss_history(...)` accept `generate_graph=False` to skip
+plotting. Set `show=False` to save a graph without displaying it.
+
 ## Regular examples
 
 Requires your own `data/example.csv` with `timestamp`, `event`, `machine`, and
