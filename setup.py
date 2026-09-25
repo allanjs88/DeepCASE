@@ -14,6 +14,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/Thijsvanede/DeepCASE",
     packages=setuptools.find_packages(),
+    extras_require={"gnn": ["torch-geometric>=2.6,<3"]},
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

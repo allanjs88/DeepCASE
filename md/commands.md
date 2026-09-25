@@ -146,3 +146,24 @@ for download instructions and label interpretation.
 
 The warning about a non-writable NumPy array during label conversion is separate
 from CUDA detection; changing the PyTorch build does not address that warning.
+
+## Isolated LANL runs with remote LogOn preprocessing
+
+The 2026-09-24 development sweep uses the complete extract
+`auth_144000_154000.txt`, remote LogOn filtering, and cutoff `147600`.
+After filtering it contains 321368 training events (zero known positives) and
+480286 test events (five known positives). This is a one-hour training pilot,
+not the full first-41-hours experiment. The current interpreter produces a
+pipeline diagnostic rather than an unsupervised anomaly score.
+
+```bash
+.venv/bin/python -u example/run_lanl_pilot.py \
+  --output example/results/lanl/NEW_RUN_NAME \
+  --epochs 25 50 100
+```
+
+Choose a new output directory for each sweep. The runner refuses to overwrite
+existing experiment artifacts and requires CUDA. Each epoch count gets its own
+folder with logs, metrics, raw predictions, plots, and a context-builder checkpoint.
+See `status.json` in the run folder for completion or failure status. Historical
+results in `example/results/lanl/25`, `50`, and `100` are separate.

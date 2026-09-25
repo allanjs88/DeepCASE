@@ -8,6 +8,8 @@ DeepCASE introduces a semi-supervised approach for the contextual analysis of se
 ## Documentation
 We provide an extensive documentation including installation instructions and reference at [deepcase.readthedocs.io](https://deepcase.readthedocs.io/en/latest/).
 
+For a detailed walkthrough of this checkout, see the [code and mathematics guide](md/deepcase-code-math-guide.md): preprocessing, encoder and decoders, loss and optimizers, attention queries, clustering, configuration options, and implementation limitations.
+
 ## Installation
 
 The dependencies in `requirements.txt` are tested with Python 3.14.

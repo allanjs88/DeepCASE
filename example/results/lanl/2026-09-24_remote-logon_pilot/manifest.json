@@ -1,0 +1,25 @@
+{
+  "auth": {
+    "path": "/home/allanmurillo/Documents/src/deepcase/DeepCASE-GNN/DeepCASE/example/data/lanl/auth_144000_154000.txt",
+    "bytes": 143546407,
+    "sha256": "5aadafd1762697a575f3d57cadb763e9d9ebc6d5940747a22cb9338d17f2d682"
+  },
+  "redteam": {
+    "path": "/home/allanmurillo/Documents/src/deepcase/DeepCASE-GNN/DeepCASE/example/data/lanl/redteam.txt",
+    "bytes": 22986,
+    "sha256": "6bbc0c7dff64e476efb08fef260822b058fd09d44d17ec488a16e80474d1e532"
+  },
+  "python": "3.14.7 (main, Aug 10 2026, 00:00:00) [GCC 16.1.1 20260515 (Red Hat 16.1.1-2)]",
+  "platform": "Linux-7.2.4-200.fc44.x86_64-x86_64-with-glibc2.43",
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "gpu": "NVIDIA GeForce RTX 5070",
+  "epochs": [
+    25,
+    50,
+    100
+  ],
+  "seed": 42,
+  "commit": "7e87f4cfac4e984c3b1d75a0cbf913ac35249732",
+  "scope": "bounded remote LogOn pilot, not full first-41-hours training"
+}

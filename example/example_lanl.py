@@ -35,6 +35,8 @@ DERIVED_COLUMNS = [
     "user_mismatch",
 ]
 
+PAPER_SPLIT_TIME = 41 * 3600
+
 DEFAULT_EVENT_FIELDS = [
     "authentication_type",
     "logon_type",
@@ -50,6 +52,7 @@ def read_auth(path, nrows=None):
         path,
         names=AUTH_COLUMNS,
         nrows=nrows,
+        keep_default_na=False,
         dtype={
             "timestamp": "int64",
             "source_user": "string",
@@ -70,7 +73,11 @@ def read_auth(path, nrows=None):
 
 def read_redteam(path):
     """Read LANL redteam events."""
-    return pd.read_csv(path, names=REDTEAM_COLUMNS)
+    return pd.read_csv(
+        path, names=REDTEAM_COLUMNS, keep_default_na=False,
+        dtype={column: "int64" if column == "timestamp" else "string"
+               for column in REDTEAM_COLUMNS},
+    )
 
 
 def redteam_keys(redteam):
@@ -112,12 +119,29 @@ def summarize_lanl(auth, redteam, top=5):
         print(auth[column].value_counts(dropna=False).head(top).to_string())
 
 
-def make_lanl_frame(auth_path, redteam_path, nrows=None, event_fields=None, summary=False):
+def make_lanl_frame(auth_path, redteam_path, nrows=None, event_fields=None, summary=False,
+                    auth_scope="remote-logon"):
     """Convert LANL auth data into DeepCASE's timestamp/machine/event/label CSV shape."""
     event_fields = event_fields or DEFAULT_EVENT_FIELDS
     redteam = read_redteam(redteam_path)
     redteam_events = redteam_keys(redteam)
     auth = read_auth(auth_path, nrows=nrows)
+
+    # Physical input-row IDs survive filtering/sorting and identify duplicate events.
+    auth["event_id"] = np.arange(len(auth))
+    if auth_scope == "remote-logon":
+        # Remote means distinct, known hosts; do not restrict logon_type or package.
+        known_hosts = (~auth["source_computer"].isin(["?", ""]) &
+                       ~auth["destination_computer"].isin(["?", ""]))
+        auth = auth.loc[
+            known_hosts &
+            auth["source_computer"].ne(auth["destination_computer"]) &
+            auth["authentication_orientation"].eq("LogOn")
+        ].copy()
+    elif auth_scope != "all":
+        raise ValueError("auth_scope must be remote-logon or all.")
+    if auth.empty:
+        raise ValueError("No authentication rows remain after input filtering.")
 
     auth = auth.sort_values("timestamp", kind="stable").reset_index(drop=True)
     auth["label"] = [
@@ -133,31 +157,33 @@ def make_lanl_frame(auth_path, redteam_path, nrows=None, event_fields=None, summ
     event_values = auth[event_fields].astype("string").agg("|".join, axis=1)
     auth["event"] = pd.factorize(event_values, sort=True)[0]
 
-    return auth.rename(
-        columns={
-            "source_computer": "machine",
-        }
-    )[["timestamp", "machine", "event", "label"]]
+    # Additional columns are ignored by Preprocessor but retained for graph input
+    # and event-level evaluation. Never merge or deduplicate authentication rows.
+    auth["machine"] = auth["source_computer"]
+    return auth[["timestamp", "machine", "event", "label", "event_id"] +
+                AUTH_COLUMNS[1:] + DERIVED_COLUMNS]
 
 
-def partition_index(data, train_ratio=0.2, split_time=None):
-    if not 0 < train_ratio < 1:
+def partition_index(data, train_ratio=None, split_time=None):
+    if train_ratio is not None and not 0 < train_ratio < 1:
         raise ValueError("train-ratio must be between 0 and 1.")
     if data.empty:
         raise ValueError("No authentication rows loaded.")
+    if split_time is None and train_ratio is None:
+        split_time = PAPER_SPLIT_TIME
     if split_time is None:
         candidate = min(int(len(data) * train_ratio), len(data) - 1)
         split_time = int(data.iloc[candidate]["timestamp"])
     split = int(data["timestamp"].searchsorted(split_time, side="left"))
     if split == 0 or split == len(data):
-        raise ValueError("Temporal split produced an empty partition; choose another split-time.")
+        raise ValueError("Temporal split produced an empty partition; load data spanning the cutoff or explicitly choose a pilot split.")
     print("Temporal split: train timestamp < {}; test timestamp >= {}".format(split_time, split_time))
     for name, frame in [("Train", data.iloc[:split]), ("Test", data.iloc[split:])]:
         positives = int(frame["label"].sum())
         print("{}: {:,} rows; {:,} redteam matches; timestamps {} to {}".format(
             name, len(frame), positives, frame["timestamp"].min(), frame["timestamp"].max()))
-        if positives == 0:
-            print("Warning: {} has no known positive events.".format(name))
+        if positives == 0 and name == "Test":
+            print("Warning: Test has no known positive events.")
     return split
 
 
@@ -208,8 +234,13 @@ def parse_args():
     )
     parser.add_argument("--context-length", default=10, type=int)
     parser.add_argument("--timeout", default=86_400, type=int)
-    parser.add_argument("--train-ratio", default=0.2, type=float)
-    parser.add_argument("--split-time", type=int, help="First test timestamp; keeps equal timestamps together.")
+    parser.add_argument("--auth-scope", choices=["remote-logon", "all"],
+                        default="remote-logon", help="Default: LogOn between distinct known hosts.")
+    split_options = parser.add_mutually_exclusive_group()
+    split_options.add_argument("--train-ratio", type=float,
+                               help="Explicit pilot split by row fraction, keeping timestamp ties together.")
+    split_options.add_argument("--split-time", type=int,
+                               help="First test timestamp; default: 147600 (41 hours).")
     parser.add_argument("--report-only", action="store_true", help="Report partition label counts without allocating context tensors or training.")
     parser.add_argument("--hidden-size", default=128, type=int)
     parser.add_argument("--epochs", default=3, type=int)
@@ -237,6 +268,7 @@ if __name__ == "__main__":
         nrows=nrows,
         event_fields=args.event_fields,
         summary=args.summary,
+        auth_scope=args.auth_scope,
     )
 
     print("Loaded {:,} LANL auth events".format(data.shape[0]))
@@ -257,6 +289,8 @@ if __name__ == "__main__":
                 .format(nrows)
             )
 
+    if nrows is not None:
+        print("Pilot input: physical-row prefix; not a complete temporal evaluation interval.")
     split = partition_index(data, args.train_ratio, args.split_time)
     if args.report_only:
         raise SystemExit(0)
@@ -268,6 +302,7 @@ if __name__ == "__main__":
 
     context, events, labels, mapping = preprocessor.sequence(
         data=data,
+        labels=data["label"].to_numpy(copy=True),
         verbose=args.verbose,
     )
 
@@ -277,6 +312,13 @@ if __name__ == "__main__":
             tuple(events.shape),
         ))
         raise SystemExit(0)
+
+    if data.iloc[:split]["label"].any():
+        raise ValueError("Training contains Red Team labels. Choose a pre-attack cutoff; "
+                         "attack labels must not be used for fitting this LANL baseline.")
+    print("Warning: benign-only DeepCASE cluster scores are not anomaly scores. "
+          "The classification report below is a pipeline diagnostic, not a "
+          "paper-comparable unsupervised detection evaluation.")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print("Using device: {}".format(device))
@@ -327,7 +369,7 @@ if __name__ == "__main__":
         query_batch_size=args.query_batch_size,
         strategy="max",
         NO_SCORE=-1,
-        verbose=True,
+        verbose=args.verbose,
     )
 
     prediction = deepcase.predict(
@@ -335,7 +377,7 @@ if __name__ == "__main__":
         y=events_test.reshape(-1, 1),
         iterations=args.iterations,
         batch_size=args.query_batch_size,
-        verbose=True,
+        verbose=args.verbose,
     )
 
     ########################################################################

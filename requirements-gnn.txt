@@ -1,0 +1,3 @@
+# Additional dependency for the optional deepcase_gnn package.
+# Install PyTorch for your CPU/CUDA platform before this file.
+torch-geometric>=2.6,<3

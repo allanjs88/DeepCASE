@@ -18,6 +18,9 @@ Reference material:
 - [Exploration notebook](/home/allanmurillo/Documents/src/deepcase/Datasets/DatasetLanl/exploration.ipynb), saved outputs reviewed on 2026-09-09; not rerun for this document.
 - [Thesis proposal](/home/allanmurillo/Downloads/thesis-proposal.pdf), methodology and preliminary LANL analysis, especially sections 5.4–5.5 and Appendix A.
 - [Current LANL example](../example/example_lanl.py).
+- [Larroche paper methodological notes](lanl-larroche-paper.md).
+- [LANL dataset notes](lanl.md).
+- [Implemented input defaults and limitations](lanl-input-processing.md).
 
 The notebook and proposal are reference material. Operational choices below are
 proposed working decisions unless explicitly attributed to those sources.
@@ -71,6 +74,20 @@ Use vectorized joins or tuple membership instead of the notebook's row-wise
 
 ### Select data without removing context
 
+Use the same remote LogOn scope for both models: authentication orientation is
+`LogOn`, source and destination computers are distinct, and both hosts are known
+(neither `?` nor empty). Keep all authentication packages, successful and failed
+outcomes, and human, computer, local, and built-in accounts. Do not select users
+based on Red Team involvement or downsample benign users. Report excluded rows
+and label coverage before and after filtering. This is the proposed primary scope
+from the methodological notes, not a claim of exact reproduction of the paper.
+
+The example now applies this scope by default; `--auth-scope all` is an explicit
+alternative for a separately reported ablation. It retains duplicate events and
+source/destination metadata. Its `event_id` identifies the physical row in the
+supplied file; extracts need provenance to recover original raw-file row IDs.
+The example still reads its selected input into memory rather than in chunks.
+
 Use complete contiguous time intervals for primary experiments. Choose the initial
 development interval using resource limits and coverage diagnostics, and record
 its boundaries. Expand it after the pipeline works reliably.
@@ -92,8 +109,19 @@ Define chronological training, validation, and test boundaries before model
 comparison. Publish their exact timestamps and class counts. Select boundaries
 using development considerations, not whichever test interval gives better scores.
 
-The current example uses a 20%/80% row split after sorting and has no validation
-partition. It is a smoke test, not the complete experiment protocol. A late test
+Use 147600 seconds (41 hours) as the primary train/test cutoff, following the
+methodological notes: pre-cutoff data is available for development and training;
+all retained events at or after the cutoff form the test period. Reserve a
+chronological tail of the pre-cutoff period for validation and record its exact
+boundary. Use label-free validation criteria or a background false-alert budget;
+do not tune against the test intrusion. Freeze the final fitting/refitting policy
+before testing. A bounded development interval is a pilot, not full-period evidence.
+
+The current example defaults to this 41-hour cutoff but has no validation
+partition. `--train-ratio 0.2` explicitly restores the earlier chronological pilot
+split; `--split-time` selects a custom cutoff. The default 100000 physical-row
+prefix may not span 41 hours and is not a complete temporal interval. The example
+rejects an empty partition instead of silently changing the cutoff. A late test
 interval may fall beyond the observed redteam period; report such intervals as
 background-only evaluation, not attack-recall experiments.
 
@@ -124,11 +152,18 @@ Start from the existing example and document its behavior:
 - Source computer becomes `machine`, defining host-local sequences.
 - Default event categories combine authentication type, logon type, orientation,
   success, and `user_mismatch`.
-- Destination computer is not retained in the final DeepCASE input table.
+- Both host endpoints and the original authentication attributes are retained in
+  the returned table; DeepCASE uses the source-host `machine` column for sequences.
 - The example factorizes categories over the entire loaded sample; replace this
   with the training vocabulary policy for formal experiments.
-- Training labels are supplied to the interpreter through `scores=labels_train`.
-  Account for this supervision when comparing against a supervised GNN.
+- Training labels are supplied to the interpreter through `scores=labels_train`,
+  but the example now rejects model fitting if training contains known Red Team
+  events. With all-zero training labels, cluster scores do not provide a useful
+  unsupervised anomaly ranking. The printed classification report is a pipeline
+  diagnostic, not a completed detection baseline.
+- Define an unsupervised scoring method for the primary LANL comparison. Do not
+  train either model on part of the labeled intrusion and evaluate on the rest.
+  Any supervised alternative needs a separate protocol and external training data.
 - The example converts predictions using `prediction > 0`. Inspect interpreter
   output semantics, including unknown/unscored outcomes, before treating outputs
   as probabilities or using them for ranking metrics.
@@ -143,8 +178,9 @@ matrix, output interpretation, runtime, and peak memory usage.
 
 ## 5. Build causal host graphs and integrate the GRU
 
-Construct directed host graphs from all authentication activity in the selected
-history, including unmatched events. Redteam labels must not determine whether
+Construct directed host graphs from all retained remote LogOn activity in the
+selected history, including unmatched events. Use the same filtered event table
+as the baseline. Redteam labels must not determine whether
 an edge exists or enter node/edge features.
 
 | Component | Proposed initial definition |
@@ -156,8 +192,12 @@ an edge exists or enter node/edge features.
 | Event prediction | Source embedding, destination embedding, and current authentication attributes |
 | New hosts | Explicit initialization policy when historical context is unavailable |
 
-Keep self-authentication events initially and document their treatment separately
-from GNN self-loops. Do not infer a chronological attack path from a static graph.
+The primary remote LogOn scope excludes self-authentication records. GNN self-loops
+are a separate architectural choice and must be documented. If an all-authentication
+ablation includes self-authentication, apply that input scope to both models.
+Graph aggregation must not merge evaluation samples or propagate a positive label
+to every event sharing an edge: map each prediction back to its original event and
+exact Red Team label. Do not infer a chronological attack path from a static graph.
 User identity may support historical statistics, but `user_mismatch` alone does
 not encode credential reuse across hosts.
 
@@ -179,11 +219,15 @@ partitions, scored events, label budget, and comparable tuning effort throughout
 | ID | Configuration | Question |
 | --- | --- | --- |
 | E0 | Always predict unmatched/negative | How misleading is accuracy under the observed imbalance? |
-| E1 | DeepCASE with the documented LANL event encoding | What does the baseline achieve? |
+| E1 | DeepCASE with the documented LANL event encoding and explicit output semantics | What does the baseline achieve, and which events remain unscored? |
 | E2 | GRU features with the proposed event scoring head, without message passing | Does changing the scorer explain improvement? |
 | E3 | GRU + GNN with the same scoring head as E2 | Does relational information add value? |
 | E4 | E3 with and without `user_mismatch` | Does this feature help beyond temporal and relational context? |
 | E5 | E3 across a small predefined history-window grid | How sensitive are detection and resource use to graph history? |
+
+The current example's interpreter diagnostic does not complete E1. Implement and
+validate the unsupervised scoring protocol before claiming a detection comparison;
+E2 and E3 must share the same label-free objective and scoring head.
 
 Use development pilots to choose feasible settings. Freeze the final matrix and
 run at least five paired seeds as a proposed starting point, matching the same
@@ -248,7 +292,27 @@ Link verified artifacts into the [schedule session log](schedule.md#session-log)
 when implementation or experiments are completed. Separate observed results from
 interpretations and proposed changes in the thesis write-up.
 
-## Immediate next deliverable
+## Current implementation status and next deliverable
+
+The input defaults in `example/example_lanl.py` now implement remote LogOn
+selection, the 41-hour cutoff, retained event metadata, and a guard against known
+Red Team events in model training. Four LANL unit tests passed after this update;
+these check input behavior, interval extraction, and temporal splitting.
+
+A separate 25/50/100-epoch CUDA diagnostic sweep completed on 2026-09-24. It used
+all remote LogOn events in [144000, 154000), split at 147600: 321368 training
+events with no known positives and 480286 test events with five known positives.
+This is a bounded pilot with one hour of training history, not the full first
+41 hours. All three runs produced zero positive predictions under the existing
+`prediction > 0` rule; unscored counts were 11610, 13547, and 10600 respectively.
+At 100 epochs all five known positives were unscored because their nearest cluster
+was beyond epsilon. This demonstrates the interpreter scoring limitation, not a
+completed unsupervised detection baseline.
+
+See the [verified run summary](../example/results/lanl/2026-09-24_remote-logon_pilot/summary.md)
+and [configuration and reproduction notes](../example/results/lanl/2026-09-24_remote-logon_pilot/README.md).
+Historical result folders are unchanged. Training-only vocabulary handling,
+validation partitioning, unsupervised scoring, and formal evaluation remain open.
 
 Implement a chunked LANL coverage report showing authentication rows, unique
 redteam matches, positive prevalence, and host counts by day. Use it to specify a

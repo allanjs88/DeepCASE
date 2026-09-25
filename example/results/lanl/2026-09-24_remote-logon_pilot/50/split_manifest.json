@@ -1,0 +1,14 @@
+{
+  "train": {
+    "rows": 321368,
+    "positive_rows": 0,
+    "first_timestamp": 144000,
+    "last_timestamp": 147599
+  },
+  "test": {
+    "rows": 480286,
+    "positive_rows": 5,
+    "first_timestamp": 147600,
+    "last_timestamp": 153999
+  }
+}

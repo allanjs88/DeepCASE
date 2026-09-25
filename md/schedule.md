@@ -20,9 +20,9 @@ Goal: reproducible data preparation, a working GRU + GNN prototype, and a prelim
 | II-02 | 1–2 | Aug 03–Aug 16 | Execute DeepCASE and review its architecture and source. | Reproducible baseline command and notes on the context builder, interpreter, inputs, and outputs. | Done |
 | II-03 | 2–3 | Aug 10–Aug 23 | Adapt and preprocess LANL. | Repeatable pipeline producing event sequences, host/user mappings, graph inputs, and label coverage counts. | Done |
 | II-04 | 3–4 | Aug 17–Aug 30 | Validate preprocessing with reference data such as HDFS. | Validation report for ordering, mappings, missing values, sequence shapes, and temporal separation. | Done |
-| II-05 | 3–5 | Aug 17–Sep 06 | Design and implement the GNN extension. | Documented graph definition, features, edge direction, time windows, and working prototype. | In progress |
-| II-06 | 3–5 | Aug 17–Sep 06 | Integrate GRU representations with the GNN. | Working integration with documented tensor shapes and a small end-to-end execution. | In progress |
-| II-07 | 5–9 | Aug 31–Oct 04 | Run initial experiments and validate the architecture. | Pilot report showing training behavior, resource needs, and issues to resolve. | In progress |
+| II-05 | 3–5 | Aug 17–Sep 06 | Design and implement the GNN extension. | Documented graph definition, features, edge direction, time windows, and working prototype. | Done |
+| II-06 | 3–5 | Aug 17–Sep 06 | Integrate GRU representations with the GNN. | Working integration with documented tensor shapes and a small end-to-end execution. | Done|
+| II-07 | 5–9 | Aug 31–Oct 04 | Run initial experiments and validate the architecture. | Pilot report showing training behavior, resource needs, and issues to resolve. | Done |
 | II-08 | 5–9 | Aug 31–Oct 04 | Run baseline DeepCASE experiments. | Baseline configurations, seeds, logs, predictions, and metrics on the agreed split. | In progress |
 | II-09 | 5–9 | Aug 31–Oct 04 | Run GRU + GNN experiments. | Comparable proposed-model runs using the same evaluation protocol. | In progress |
 | II-10 | 9–10 | Sep 28–Oct 11 | Collect and organize experimental results. | Results index linking each run to its configuration, dataset version, and artifacts. | In progress |

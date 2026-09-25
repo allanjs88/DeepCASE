@@ -1,0 +1,29 @@
+{
+  "argv": [
+    "/home/allanmurillo/Documents/src/deepcase/DeepCASE-GNN/DeepCASE/example/example_lanl.py",
+    "--auth",
+    "/home/allanmurillo/Documents/src/deepcase/DeepCASE-GNN/DeepCASE/example/data/lanl/auth_144000_154000.txt",
+    "--redteam",
+    "/home/allanmurillo/Documents/src/deepcase/DeepCASE-GNN/DeepCASE/example/data/lanl/redteam.txt",
+    "--nrows",
+    "0",
+    "--split-time",
+    "147600",
+    "--epochs",
+    "100",
+    "--batch-size",
+    "128",
+    "--query-batch-size",
+    "128"
+  ],
+  "seed": 42,
+  "interpretation": "interpreter diagnostic, not unsupervised detection",
+  "training_interval": [
+    144000,
+    147600
+  ],
+  "test_interval": [
+    147600,
+    154000
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "classification_report": {
+    "0": {
+      "precision": 0.9999895895362346,
+      "recall": 1.0,
+      "f1-score": 0.9999947947410227,
+      "support": 480281.0
+    },
+    "1": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 5.0
+    },
+    "accuracy": 0.9999895895362346,
+    "macro avg": {
+      "precision": 0.4999947947681173,
+      "recall": 0.5,
+      "f1-score": 0.49999739737051135,
+      "support": 480286.0
+    },
+    "weighted avg": {
+      "precision": 0.9999791791808471,
+      "recall": 0.9999895895362346,
+      "f1-score": 0.9999843843314465,
+      "support": 480286.0
+    }
+  },
+  "tn": 480281,
+  "fp": 0,
+  "fn": 5,
+  "tp": 0,
+  "fpr": 0.0,
+  "unscored_events": 11610,
+  "raw_score_counts": {
+    "-3.0": 1364,
+    "-1.0": 10246,
+    "0.0": 468676
+  },
+  "elapsed_seconds": 170.546588594,
+  "peak_cuda_bytes": 145952768,
+  "caveat": "prediction > 0 diagnostic treats unscored events as negative; no anomaly AP claimed"
+}
