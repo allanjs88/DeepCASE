@@ -23,12 +23,12 @@ Goal: reproducible data preparation, a working GRU + GNN prototype, and a prelim
 | II-05 | 3–5 | Aug 17–Sep 06 | Design and implement the GNN extension. | Documented graph definition, features, edge direction, time windows, and working prototype. | Done |
 | II-06 | 3–5 | Aug 17–Sep 06 | Integrate GRU representations with the GNN. | Working integration with documented tensor shapes and a small end-to-end execution. | Done|
 | II-07 | 5–9 | Aug 31–Oct 04 | Run initial experiments and validate the architecture. | Pilot report showing training behavior, resource needs, and issues to resolve. | Done |
-| II-08 | 5–9 | Aug 31–Oct 04 | Run baseline DeepCASE experiments. | Baseline configurations, seeds, logs, predictions, and metrics on the agreed split. | In progress |
-| II-09 | 5–9 | Aug 31–Oct 04 | Run GRU + GNN experiments. | Comparable proposed-model runs using the same evaluation protocol. | In progress |
+| II-08 | 5–9 | Aug 31–Oct 04 | Run baseline DeepCASE experiments. | Baseline configurations, seeds, logs, predictions, and metrics on the agreed split. | Done |
+| II-09 | 5–9 | Aug 31–Oct 04 | Run GRU + GNN experiments. | Comparable proposed-model runs using the same evaluation protocol. | Done |
 | II-10 | 9–10 | Sep 28–Oct 11 | Collect and organize experimental results. | Results index linking each run to its configuration, dataset version, and artifacts. | In progress |
-| II-11 | 9–10 | Sep 28–Oct 11 | Analyze preliminary results and improvements. | Comparison tables, error analysis, and prioritized improvements supported by evidence. | Unverified |
-| II-12 | 10–16 | Oct 05–Nov 21 | Refine configurations and run additional tests as needed. | Documented refinements and targeted reruns addressing identified issues. | Unverified |
-| II-13 | 1–16 | Aug 03–Nov 21 | Write thesis progress and research documentation. | Weekly methodology/results notes and a Seminar II progress draft. | Unverified |
+| II-11 | 9–10 | Sep 28–Oct 11 | Analyze preliminary results and improvements. | Comparison tables, error analysis, and prioritized improvements supported by evidence. | In progress |
+| II-12 | 10–16 | Oct 05–Nov 21 | Refine configurations and run additional tests as needed. | Documented refinements and targeted reruns addressing identified issues. | In progress |
+| II-13 | 1–16 | Aug 03–Nov 21 | Write thesis progress and research documentation. | Weekly methodology/results notes and a Seminar II progress draft. | In progress |
 | II-14 | 16 | Nov 16–Nov 21 | Perform preliminary parametric or non-parametric tests in R. | R script and preliminary statistical report with justified assumptions and limitations. | Unverified |
 
 ## Seminar III — February 15–June 13, 2027

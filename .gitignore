@@ -131,3 +131,6 @@ dmypy.json
 # Ignore data
 saves/
 example/data/
+example/results
+
+

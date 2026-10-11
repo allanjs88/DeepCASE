@@ -7,6 +7,9 @@ representations feed a directed host authentication graph and an event scorer.
 It is a working pilot, not the completed thesis evaluation or a drop-in
 replacement for DeepCASE's attention/query interpreter.
 
+For a source-level walkthrough with equations, tensor shapes, and a runnable
+example, see the [DeepCASE-GNN code and math guide](../md/deepcase-gnn-code-math-guide.md).
+
 ## Architecture and explicit first-version decisions
 
 ```text

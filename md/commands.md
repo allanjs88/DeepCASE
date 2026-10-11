@@ -167,3 +167,27 @@ existing experiment artifacts and requires CUDA. Each epoch count gets its own
 folder with logs, metrics, raw predictions, plots, and a context-builder checkpoint.
 See `status.json` in the run folder for completion or failure status. Historical
 results in `example/results/lanl/25`, `50`, and `100` are separate.
+
+
+
+
+## Experiments
+
+```bash
+python -u example/experiment_deepcase_lanl.py \
+  --epochs 3 \
+  --seed 42 \
+  --device cuda \
+  --output "example/results/lanl-original-$(date +%Y%m%d-%H%M%S)"
+```
+
+```bash
+python -u example/experiment_deepcase_gnn_lanl.py \
+  --epochs 3 \
+  --seed 42 \
+  --device cuda \
+  --output "example/results/lanl-gnn-$(date +%Y%m%d-%H%M%S)"
+```
+
+
+
