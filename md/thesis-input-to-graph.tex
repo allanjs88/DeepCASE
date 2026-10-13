@@ -1,0 +1,375 @@
+\documentclass{beamer}
+
+\usepackage[english]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{hyperref}
+
+\mode<presentation>{
+  \usetheme{default}
+  \usecolortheme{default}
+  \usefonttheme{default}
+  \setbeamertemplate{caption}[numbered]
+  \setbeamertemplate{navigation symbols}{}
+}
+
+% Notes remain in the source. To print them, uncomment the next line.
+% \setbeameroption{show notes}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+
+\title{DeepCASE Project}
+\subtitle{Data input and graph construction}
+\author{Allan Murillo}
+\institute{TEC}
+\date{October 11, 2026}
+
+% Implementation sources:
+% deepcase_gnn/preprocessing/preprocessor.py
+% deepcase_gnn/preprocessing/lanl.py
+% deepcase_gnn/context_builder/context_builder.py
+% Dataset source: https://csr.lanl.gov/data/cyber1/
+% This section describes the current DeepCASE-GNN implementation.
+% All C10/C20/C30 records below are illustrative, not quoted dataset rows.
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+\section{Cross-host}
+\subsection{Generic input}
+
+\begin{frame}{Input data}
+  Each row describes an observed interaction between two computers:
+  \[
+    e_i = (t_i, s_i, d_i, c_i).
+  \]
+
+  \begin{center}
+    \small
+    \begin{tabular}{@{}ll@{}}
+      \toprule
+      Required field & Meaning \\
+      \midrule
+      \code{timestamp} & $t_i$: event time in seconds \\
+      \code{source_computer} & $s_i$: computer initiating the event \\
+      \code{destination_computer} & $d_i$: destination computer \\
+      \code{event} & $c_i$: categorical description of the event \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+
+  \small
+  Optional fields include a unique \code{event_id}, \code{source_user},
+  \code{success}, and an evaluation \code{label}.
+
+  \note{The generic input is a table, usually a pandas DataFrame. The four
+  required fields preserve both time and the direction of the interaction.
+  Timestamps must be finite numeric seconds and host endpoints must be known.
+  Keep a unique physical-row ID before partitioning the data. The security label
+  is evaluation metadata. It does not define the event category or the graph.
+  Source: deepcase_gnn/preprocessing/preprocessor.py, validate_frame.}
+\end{frame}
+
+\subsection{Historical host graphs}
+
+\begin{frame}{Historical graph snapshots}
+  For events at time $t$, collect earlier activity in a window of width $W$:
+  \[
+    \mathcal{H}_t = \{e_i : t-W \leq t_i < t\},
+    \qquad G_t = (V_t, E_t).
+  \]
+
+  \begin{itemize}
+    \item \textbf{Nodes:} computers in the historical window, plus the
+      source and destination computers of current events.
+    \item \textbf{Directed edges:} one edge $(s_i,d_i)$ for each distinct
+      source--destination pair in $\mathcal{H}_t$.
+    \item \textbf{Repeated interactions:} one edge per pair, with an
+      interaction count and historical attributes.
+  \end{itemize}
+
+  \small
+  All events at $t$ share the same snapshot. Their categories, edges, and
+  statistics enter history only at later timestamps.
+
+  \note{Build one graph per distinct timestamp at which events are scored.
+  The window includes its lower bound and excludes time t, so simultaneous
+  events cannot provide context to one another. The current endpoints can add
+  isolated nodes, but current events do not create historical edges. Preserve
+  direction: an edge from A to B does not automatically create B to A.
+  The implementation constructs snapshots lazily. Its default window is 300
+  seconds, which is a configuration choice rather than an evaluated optimum.
+  Source: deepcase_gnn/preprocessing/preprocessor.py, HostGraphDataset.__getitem__.}
+\end{frame}
+
+\begin{frame}{Host and interaction features}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.49\textwidth}
+      \textbf{For each computer}
+      \begin{itemize}
+        \item Last $L$ outgoing event categories, in chronological order.
+        \item Counts of outgoing events, distinct source users, successes,
+          and failures.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \textbf{For each directed pair}
+      \begin{itemize}
+        \item Interaction count and distinct source-user count.
+        \item Failure fraction and age of the latest interaction.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+
+  \medskip
+  \small
+  Fit the category vocabulary on training data only.
+  Reserve token 0 for padding and token 1 for unseen categories.
+
+  \medskip
+  Counts and pair attributes use the whole window, even when a host's
+  sequence exceeds $L$ events.
+
+  \note{A host sequence contains only events for which that host is the source.
+  Retain the last L categories, then right-pad shorter sequences with zeros.
+  A destination-only host has an empty outgoing sequence and zero outgoing
+  statistics. User and outcome statistics require the corresponding optional
+  input columns. Node counts and pair counts use log(1+count). Pair recency is
+  (t - latest pair time)/W. The exact formulas appear in the backup slide.
+  The default sequence cap is 10 events. Hosts have no trainable identity
+  embeddings. Standard GraphSAGE uses graph topology, while the prediction head
+  also receives the current pair's historical attributes. Stored edge weights
+  and edge attributes do not weight the GraphSAGE aggregation in this version.
+  Sources: preprocessing/preprocessor.py and context_builder/context_builder.py
+  inside deepcase_gnn.}
+\end{frame}
+
+\subsection{LANL example}
+
+\begin{frame}{LANL authentication input}
+  LANL authentication records contain nine fields. Computers and accounts
+  use consistent anonymous identifiers, and time counts seconds from the
+  beginning of collection.
+
+  \medskip
+  \textbf{Illustrative authentication record}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.51\textwidth}
+      \small
+      \begin{tabular}{@{}ll@{}}
+        \toprule
+        Field & Value \\
+        \midrule
+        Time & \code{120} \\
+        Source user & \code{U7@DOM1} \\
+        Destination user & \code{U7@DOM1} \\
+        Source computer & \code{C10} \\
+        Destination computer & \code{C20} \\
+        \bottomrule
+      \end{tabular}
+    \end{column}
+    \begin{column}{0.47\textwidth}
+      \small
+      \begin{tabular}{@{}ll@{}}
+        \toprule
+        Field & Value \\
+        \midrule
+        Authentication & \code{Kerberos} \\
+        Logon type & \code{Network} \\
+        Orientation & \code{LogOn} \\
+        Result & \code{Success} \\
+        \bottomrule
+      \end{tabular}
+    \end{column}
+  \end{columns}
+
+  \medskip
+  \footnotesize
+  Source: \href{https://csr.lanl.gov/data/cyber1/}{LANL dataset documentation}.
+  This implementation reads \code{auth.txt.gz} for graph construction.
+
+  \note{LANL publishes several event sources. This implementation uses the
+  authentication file for graph construction, with the optional Red Team file
+  for evaluation. Do not imply that process, DNS, or flow files enter the current
+  graph. The displayed values form a synthetic teaching example in the LANL
+  schema, not an actual quoted authentication row. A computer identifier denotes
+  an anonymized host, not a hardware type. Dataset source:
+  https://csr.lanl.gov/data/cyber1/. Adapter source:
+  deepcase_gnn/preprocessing/lanl.py, AUTH_COLUMNS and read_lanl.}
+\end{frame}
+
+\begin{frame}{LANL normalization}
+  The adapter preserves the timestamp and both host endpoints. It builds
+  an event category from:
+  \[
+    \begin{aligned}
+      c_i = (&\text{authentication type},\ \text{logon type},\\
+             &\text{orientation},\ \text{result},\ \text{user mismatch}).
+    \end{aligned}
+  \]
+
+  \small
+  In the worked example, abbreviate two categories as:
+  \[
+    \begin{aligned}
+      S &= (\text{Kerberos},\text{Network},\text{LogOn},\text{Success},\text{False}),\\
+      F &= (\text{NTLM},\text{Network},\text{LogOn},\text{Fail},\text{False}).
+    \end{aligned}
+  \]
+
+  \begin{itemize}
+    \item Default scope: \code{LogOn} with distinct, known source and
+      destination computers.
+    \item Keep all authentication mechanisms, account categories, and
+      success/failure outcomes within that scope.
+  \end{itemize}
+
+  \note{User mismatch compares the full source and destination account strings.
+  It is False for the illustrative U7@DOM1 to U7@DOM1 event. The adapter stores
+  the five category fields as a compact JSON array of strings, including the
+  literal string False or True. The preprocessor later maps that signature to
+  a token using only the training vocabulary. S and F are slide shorthand, not
+  the literal event strings or learned token numbers. Host and raw user IDs are
+  not category vocabulary entries. The default remote-logon filter removes
+  local events, other orientations, and unknown or empty endpoints. It does
+  not merge duplicate input rows. An all-events configuration also exists.
+  Source: deepcase_gnn/preprocessing/lanl.py, EVENT_FIELDS and read_lanl.}
+\end{frame}
+
+\begin{frame}{LANL window example}
+  \textbf{Illustrative settings:} $t=200$ s and $W=100$ s.
+  The graph uses the interval $[100,200)$.
+
+  \smallskip
+  \small All rows use \code{U7@DOM1} as both user accounts.
+
+  \begin{center}
+    \small
+    \begin{tabular}{@{}rllll@{}}
+      \toprule
+      Time & Source & Destination & Category & Role at $t=200$ \\
+      \midrule
+       90 & \code{C30} & \code{C10} & $S$ & Outside window \\
+      120 & \code{C10} & \code{C20} & $S$ & History \\
+      160 & \code{C10} & \code{C20} & $F$ & History \\
+      180 & \code{C20} & \code{C30} & $S$ & History \\
+      \midrule
+      200 & \code{C30} & \code{C10} & $F$ & Current target \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+
+  \begin{itemize}
+    \item The three historical rows create two directed edges.
+    \item The two \code{C10} to \code{C20} interactions share one edge.
+    \item The current event does not create a \code{C30} to \code{C10}
+      edge in this snapshot.
+  \end{itemize}
+
+  \note{Walk through the table by role. The event at time 90 has expired from
+  the window. Times 120, 160, and 180 provide historical context. The target
+  at time 200 selects its source and destination representations, but its
+  category F is a prediction target. If other events also occurred at time
+  200, they would share this graph without entering one another's context.
+  Assume every row uses U7@DOM1 as both source and destination user, so mismatch
+  is False and each active pair has one distinct source user. These are
+  explanatory settings, not the implementation defaults. Source for window
+  and aggregation rules: deepcase_gnn/preprocessing/preprocessor.py.}
+\end{frame}
+
+\begin{frame}{LANL graph and host histories}
+  The historical graph at $t=200$ has three computer nodes:
+  \[
+    \mathrm{C10}
+      \xrightarrow{\text{2 events}}
+    \mathrm{C20}
+      \xrightarrow{\text{1 event}}
+    \mathrm{C30}.
+  \]
+
+  With $L=3$, the outgoing host sequences and counts are:
+  \begin{center}
+    \small
+    \begin{tabular}{@{}l@{\qquad}l@{\qquad}l@{}}
+      \toprule
+      Host & Sequence & Counts $(n,u,s,f)$ \\
+      \midrule
+      \code{C10} & $[S,F,0]$ & $(2,1,1,1)$ \\
+      \code{C20} & $[S,0,0]$ & $(1,1,1,0)$ \\
+      \code{C30} & $[0,0,0]$ & $(0,0,0,0)$ \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+
+  \small
+  $S$ and $F$ stand for category tokens, and $0$ denotes padding.
+  Counts represent outgoing events, distinct source users, successes, and
+  failures. Node features apply $\log(1+\text{count})$.
+
+  \medskip
+  The target pair $(\mathrm{C30},\mathrm{C10})$ has no edge in the window,
+  so its historical pair attributes are zero.
+
+  \note{The graph captures relationships across computers, while each sequence
+  captures one computer's outgoing behavior. C30 has no outgoing history in
+  this window, even though it is a destination and the source of the current
+  target. Its historical sequence and outgoing statistics are therefore zero.
+  Incoming GraphSAGE messages can still provide context from C20. The sequence
+  entries S and F stand for their training-vocabulary tokens, not literal model
+  inputs. The edge labels display stored interaction counts. Standard SAGEConv
+  does not use those counts as aggregation weights in the current implementation.
+  This graph and the encoded host histories become inputs to the GRU and GNN.
+  Sources: deepcase_gnn/preprocessing/preprocessor.py and
+  deepcase_gnn/context_builder/context_builder.py.}
+\end{frame}
+
+\appendix
+
+\begin{frame}{Backup: feature definitions and evaluation labels}
+  \small
+  For a host $v$, let $n_v,u_v,s_v,f_v$ count its outgoing events,
+  distinct source users, successes, and failures:
+  \[
+    x_v = [\log(1+n_v),\log(1+u_v),\log(1+s_v),\log(1+f_v)].
+  \]
+
+  For an ordered pair $(a,b)$, let $n_{ab}$ count events,
+  $u_{ab}$ count distinct source users, and $\rho_{ab}$ be its failure fraction:
+  \[
+    a_{ab} = \left[\log(1+n_{ab}),\log(1+u_{ab}),\rho_{ab},
+      \frac{t-t^{\mathrm{last}}_{ab}}{W}\right].
+  \]
+
+  \begin{itemize}
+    \item GraphSAGE uses topology. The event head uses the target pair's
+      historical attributes.
+    \item Optional Red Team labels match
+      $(\text{time},\text{source user},\text{source host},\text{destination host})$
+      exactly and serve evaluation only.
+    \item Label 0 means no known Red Team match.
+  \end{itemize}
+
+  \note{All feature counts use the full historical window. Pair failure
+  fraction is the number of Fail rows divided by all rows for that pair.
+  Recency is normalized by window width W. Stored edge_weight is the raw
+  interaction count, but neither edge_weight nor edge_attr is passed into
+  SAGEConv. The event head receives the historical attributes for its selected
+  pair, or zeros for an unseen pair. A security label is separate from the event
+  category being predicted and does not enter model training or features.
+  A missing Red Team match does not prove that an event was benign.
+  Sources: deepcase_gnn/preprocessing/preprocessor.py,
+  deepcase_gnn/preprocessing/lanl.py, and
+  deepcase_gnn/context_builder/context_builder.py. Dataset label source:
+  https://csr.lanl.gov/data/cyber1/.}
+\end{frame}
+
+\end{document}
